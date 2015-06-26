@@ -8,14 +8,28 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import precision_recall_fscore_support, roc_auc_score
 
 def y_summary(y_test, y_pred):
+    """
+    Given binary vectors y_test and y_pred of the same length, calculate the precision, recall, accuracy and 
+    area under the ROC curve of y_pred as a prediction of y_test, and the proportion of positive ("1") entries
+    in each of the two, and return these.
+    """
+    
     precision, recall, fbeta, support = precision_recall_fscore_support(y_test, y_pred, average='binary')
     accuracy = sum(y_pred == y_test)*1.0/len(y_test)
-    true_proportion = sum(y_test)*1.0/len(y_test)
-    predicted_proportion = sum(y_pred)*1.0/len(y_pred)
+    true_proportion = np.mean(y_test)
+    predicted_proportion = np.mean(y_pred)
     auc = roc_auc_score(y_test, y_pred)
     return precision, recall, accuracy, true_proportion, predicted_proportion, auc
-    #print '--'
-    #print 'precision: %f\nrecall: %f\naccuracy: %f\ntrue_proportion: %f\nauc: %f' % (precision, recall, accuracy, true_proportion, auc)
+
+def reshape_helper(a):
+    """
+    Convert array of arrays to 2D array.
+    """
+    
+    m = len(a)
+    n = len(a[0])
+    flat = np.array(list(itertools.chain(*a)))
+    return flat.reshape(m,n)
 
 def strings_to_tokens_list(strings, multiplicity=False):
     """
@@ -87,19 +101,24 @@ def html_to_link_text_token_string(txt):
     #return root_to_link_text_token_string(etree.HTML(txt.encode('utf-8')))
 
 def root_to_button_name_token_string(root, multiplicity=False):
+    tokens = []
+
     # find tokens from text of elements with 'button' as a substring of the attribute 'class'
-    tokens1 = root_to_tokens_list(root, attr='text', attr_pat_dict={'class':r'.*button'}, multiplicity=True)
+    tokens += root_to_tokens_list(root, attr='text', attr_pat_dict={'class':r'.*button'}, multiplicity=True)
     
     # find tokens from 'value' attributes of input-type elements with 'type' attribute 'button' or 'submit'
-    tokens2 = root_to_tokens_list(root, attr='value', element_type='input', attr_pat_dict={'type':r'(?:button)|(?:submit)'}, multiplicity=True)
+    tokens += root_to_tokens_list(root, attr='value', element_type='input', attr_pat_dict={'type':r'(?:button)|(?:submit)'}, multiplicity=True)
     
     # find tokens from text of button-type elements
-    tokens3 = root_to_tokens_list(root, attr='text', element_type='button', multiplicity=True)
+    tokens += root_to_tokens_list(root, attr='text', element_type='button', multiplicity=True)
+
+    # find tokens from titles of anchors
+    tokens += root_to_tokens_list(root, attr='title', element_type='a', multiplicity=True)
     
     if multiplicity:
-        return ' '.join(tokens1 + tokens2 + tokens3)
+        return ' '.join(tokens)
     else:
-        return ' '.join(np.unique(tokens1 + tokens2 + tokens3))
+        return ' '.join(np.unique(tokens))
 
 def html_to_button_name_token_string(txt):
     parser = etree.HTMLParser(encoding='utf-8')
@@ -155,7 +174,11 @@ def cross_validate_lolo(X_token_strings, y, labels, clfs, use_tfidf=False):
             accuracy = sum(y_pred == y_test)*1.0/len(y_test)
             true_proportion = sum(y_test)*1.0/len(y_test)
             predicted_proportion = sum(y_pred)*1.0/len(y_pred)
-            auc = roc_auc_score(y_test, y_pred)
+            try:
+                auc = roc_auc_score(y_test, y_pred)
+            except:
+                auc = 0
+                pass
             results += [(label, len(y_test), accuracy, precision, recall, true_proportion, predicted_proportion, auc)]
             all_y_test = np.append(all_y_test, y_test)
             all_y_pred = np.append(all_y_pred, y_pred)
